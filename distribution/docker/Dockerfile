@@ -49,6 +49,10 @@ RUN --mount=type=cache,target=/root/.m2 VERSION=$(mvn -B -q org.apache.maven.plu
  && tar -zxf ./distribution/target/apache-druid-${VERSION}-bin.tar.gz -C /opt \
  && mv /opt/apache-druid-${VERSION} /opt/druid
 
+RUN rm -rf /opt/druid/extensions/druid-iceberg-extensions && rm -rf /opt/druid/extensions/druid-ranger-security && rm -rf /opt/druid/extensions/druid-hdfs-storage && rm -rf /opt/druid/extensions/druid-thrift-extensions && rm -rf /opt/druid/extensions/druid-orc-extensions && rm -rf /opt/druid/extensions/druid-avro-extensions && rm -rf /opt/druid/extensions/druid-cassandra-storage && rm -rf /opt/druid/extensions/druid-kinesis-indexing-service && rm -rf /opt/druid/extensions/druid-cloudfiles-extensions && rm -rf /opt/druid/extensions/druid-influxdb-emitter
+
+RUN mv /opt/druid/lib /home/lib
+
 FROM alpine:3 as bash-static
 ARG TARGETARCH
 #
@@ -83,6 +87,7 @@ COPY --from=bash-static /bin/bash /bin/bash
 RUN chmod 755 /bin/bash
 
 COPY --chown=druid:druid --from=builder /opt /opt
+COPY --chown=druid:druid --from=builder /home/lib /opt/druid/lib
 COPY distribution/docker/druid.sh /druid.sh
 COPY distribution/docker/peon.sh /peon.sh
 
