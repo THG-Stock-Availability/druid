@@ -77,7 +77,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GRGIT_PASS }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -97,6 +97,8 @@ jobs:
             org.opencontainers.image.created=${{ github.event.release.published_at }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          secrets: |
+            GITHUB_TOKEN=${{ secrets.GRGIT_PASS }}
           build-args: |
             BUILD_FROM_SOURCE=true
             JDK_VERSION=17
