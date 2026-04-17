@@ -41,7 +41,7 @@ env:
   KUBECTL_VERSION: "1.28.0"
   HELM_TIMEOUT: 20m
 
-  # Update these for your charts repo
+  # Update these to match your charts repo
   CHARTS_REPO: THG-Stock-Availability/druid-helm-template
   CHARTS_REF: main
 
@@ -74,6 +74,13 @@ jobs:
           echo "Change Request: $CR_ID"
           echo "Deploy GCP Live: ${{ inputs.deploy_gcp_live }}"
           echo "Deploy GB1 Live: ${{ inputs.deploy_gb1_live }}"
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GRGIT_USER }}
+          password: ${{ secrets.GRGIT_PASS }}
 
       - name: Verify image exists
         shell: bash
@@ -109,7 +116,7 @@ jobs:
           repository: ${{ env.CHARTS_REPO }}
           ref: ${{ env.CHARTS_REF }}
           path: charts-repo
-          token: ${{ secrets.GRGIT_PASS }}
+          token: ${{ secrets.UNITY_CHART_TOKEN || secrets.GRGIT_PASS }}
 
       - name: Set image info
         id: image
@@ -227,7 +234,7 @@ jobs:
           repository: ${{ env.CHARTS_REPO }}
           ref: ${{ env.CHARTS_REF }}
           path: charts-repo
-          token: ${{ secrets.GRGIT_PASS }}
+          token: ${{ secrets.UNITY_CHART_TOKEN || secrets.GRGIT_PASS }}
 
       - name: Set image info
         id: image
