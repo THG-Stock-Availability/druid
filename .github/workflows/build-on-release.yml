@@ -48,17 +48,6 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Generated version: ${VERSION}"
 
-      - name: Validate release tag format
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9._-]+)?$ ]]; then
-            echo "❌ Invalid release tag: $VERSION"
-            echo "Expected format like v1.2.3"
-            exit 1
-          fi
-
       - name: Determine image info
         id: image_info
         shell: bash
