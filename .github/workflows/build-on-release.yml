@@ -73,6 +73,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Debug secrets presence
+        shell: bash
+        run: |
+              set -euo pipefail
+              
+              if [[ -z "${{ secrets.GRGIT_USER }}" ]]; then
+                echo "❌ GRGIT_USER is EMPTY or not accessible"
+              else
+                echo "✅ GRGIT_USER is present"
+              fi
+              
+              if [[ -z "${{ secrets.GRGIT_PASS }}" ]]; then
+                echo "❌ GRGIT_PASS is EMPTY or not accessible"
+              else
+                echo "✅ GRGIT_PASS is present"
+              fi
+
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
