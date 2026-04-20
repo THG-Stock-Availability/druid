@@ -94,8 +94,10 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GRGIT_USER }}
-          password: ${{ secrets.GRGIT_PASS }}
+#          username: ${{ secrets.GRGIT_USER }}
+#          password: ${{ secrets.GRGIT_PASS }}
+          username: sa_ghstock01
+          password: stockDev@2025
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
