@@ -116,7 +116,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           secrets: |
-            GITHUB_TOKEN=${{ secrets.GRGIT_PASS }}
+            GITHUB_TOKEN=${{ github.token }}
           build-args: |
             BUILD_FROM_SOURCE=true
             JDK_VERSION=17
