@@ -39,7 +39,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_REPO: ghcr.io/thg-stock-availability/druid
   HELM_VERSION: "3.12.0"
-  KUBECTL_VERSION: "1.28"
+  KUBECTL_VERSION: 'latest'
   CHARTS_REPO: THG-Stock-Availability/druid-helm-template
   CHARTS_REF: add-GCP-Clusters
 
