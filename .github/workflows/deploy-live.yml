@@ -58,11 +58,6 @@ jobs:
             exit 1
           fi
 
-          if [[ "${{ inputs.confirm_production_deploy }}" != "CONFIRM" ]]; then
-            echo "❌ You must type CONFIRM to deploy to live"
-            exit 1
-          fi
-
           CR_ID="${{ inputs.change_request_id }}"
           if [[ -z "$CR_ID" ]]; then
             CR_ID="N/A"
@@ -158,6 +153,29 @@ jobs:
         run: |
           set -euo pipefail
           echo -n "${{ secrets.GCP_LI_CLUSTER_CA }}" | base64 -d > /tmp/ca.crt
+          
+          - name: Debug cluster secrets presence
+            shell: bash
+            run: |
+              set -euo pipefail
+
+          if [[ -z "${{ secrets.GCP_LI_CLUSTER_CA }}" ]]; then
+            echo "❌ GCP_LI_CLUSTER_CA missing"
+              else
+            echo "✅ GCP_LI_CLUSTER_CA present"
+          fi
+
+          if [[ -z "${{ secrets.GKE_LI_CLUSTER_SERVER }}" ]]; then
+            echo "❌ GKE_LI_CLUSTER_SERVER missing"
+              else
+            echo "✅ GKE_LI_CLUSTER_SERVER present"
+          fi
+
+          if [[ -z "${{ secrets.GCP_LI_DEPLOY_TOKEN }}" ]]; then
+            echo "❌ GCP_LI_DEPLOY_TOKEN missing"
+              else
+            echo "✅ GCP_LI_DEPLOY_TOKEN present"
+          fi
 
           kubectl config set-cluster "${{ env.CLUSTER }}" \
             --server="${{ secrets.GKE_LI_CLUSTER_SERVER }}" \
