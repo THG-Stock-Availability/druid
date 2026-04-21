@@ -12,10 +12,6 @@ on:
         description: "Change Request ID (optional)"
         required: false
         type: string
-      confirm_production_deploy:
-        description: "Type CONFIRM to deploy to live"
-        required: true
-        type: string
       deploy_gcp_live:
         description: "Deploy to GCP Live"
         required: false
@@ -39,7 +35,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_REPO: ghcr.io/thg-stock-availability/druid
   HELM_VERSION: "3.12.0"
-  KUBECTL_VERSION: 'latest'
+  KUBECTL_VERSION: "latest"
   CHARTS_REPO: THG-Stock-Availability/druid-helm-template
   CHARTS_REF: add-GCP-Clusters
 
@@ -91,7 +87,7 @@ jobs:
     if: inputs.deploy_gcp_live == true
     needs: validate-inputs
     runs-on: ubuntu-latest
-    environment: gcp-live
+    environment: gcp-live-approval
     continue-on-error: true
     outputs:
       approved: ${{ steps.approved.outputs.approved }}
@@ -148,34 +144,34 @@ jobs:
         with:
           version: ${{ env.HELM_VERSION }}
 
-      - name: Configure kubectl
+      - name: Debug cluster secrets presence
         shell: bash
         run: |
           set -euo pipefail
-          echo -n "${{ secrets.GCP_LI_CLUSTER_CA }}" | base64 -d > /tmp/ca.crt
-          
-          - name: Debug cluster secrets presence
-            shell: bash
-            run: |
-              set -euo pipefail
 
           if [[ -z "${{ secrets.GCP_LI_CLUSTER_CA }}" ]]; then
             echo "❌ GCP_LI_CLUSTER_CA missing"
-              else
+          else
             echo "✅ GCP_LI_CLUSTER_CA present"
           fi
 
           if [[ -z "${{ secrets.GKE_LI_CLUSTER_SERVER }}" ]]; then
             echo "❌ GKE_LI_CLUSTER_SERVER missing"
-              else
+          else
             echo "✅ GKE_LI_CLUSTER_SERVER present"
           fi
 
           if [[ -z "${{ secrets.GCP_LI_DEPLOY_TOKEN }}" ]]; then
             echo "❌ GCP_LI_DEPLOY_TOKEN missing"
-              else
+          else
             echo "✅ GCP_LI_DEPLOY_TOKEN present"
           fi
+
+      - name: Configure kubectl
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo -n "${{ secrets.GCP_LI_CLUSTER_CA }}" | base64 -d > /tmp/ca.crt
 
           kubectl config set-cluster "${{ env.CLUSTER }}" \
             --server="${{ secrets.GKE_LI_CLUSTER_SERVER }}" \
@@ -276,12 +272,17 @@ jobs:
             echo "- Status: ${{ job.status }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Clean up credentials
+        if: always()
+        shell: bash
+        run: rm -f /tmp/ca.crt
+
   gb1-approval:
     name: GB1 Live - Approval
     if: inputs.deploy_gb1_live == true
     needs: validate-inputs
     runs-on: ubuntu-latest
-    environment: gb1-live
+    environment: gb1-live-approval
     continue-on-error: true
     outputs:
       approved: ${{ steps.approved.outputs.approved }}
@@ -337,6 +338,29 @@ jobs:
         uses: azure/setup-helm@v4
         with:
           version: ${{ env.HELM_VERSION }}
+
+      - name: Debug cluster secrets presence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${{ secrets.GB1_CLUSTER_CA }}" ]]; then
+            echo "❌ GB1_CLUSTER_CA missing"
+          else
+            echo "✅ GB1_CLUSTER_CA present"
+          fi
+
+          if [[ -z "${{ secrets.GB1_CLUSTER_SERVER }}" ]]; then
+            echo "❌ GB1_CLUSTER_SERVER missing"
+          else
+            echo "✅ GB1_CLUSTER_SERVER present"
+          fi
+
+          if [[ -z "${{ secrets.GB1_DEPLOY_TOKEN }}" ]]; then
+            echo "❌ GB1_DEPLOY_TOKEN missing"
+          else
+            echo "✅ GB1_DEPLOY_TOKEN present"
+          fi
 
       - name: Configure kubectl
         shell: bash
@@ -442,3 +466,8 @@ jobs:
             echo "- Change Request: ${CR_ID}"
             echo "- Status: ${{ job.status }}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up credentials
+        if: always()
+        shell: bash
+        run: rm -f /tmp/ca.crt
