@@ -110,7 +110,7 @@ jobs:
     name: GCP Live - Deploy
     if: inputs.deploy_gcp_live == true && needs.gcp-approval.outputs.approved == 'true'
     needs: [validate-inputs, gcp-approval]
-    runs-on: ubuntu-latest
+    runs-on: stock-gcp-runner
     timeout-minutes: 45
     environment: gcp-live
     env:
@@ -305,7 +305,7 @@ jobs:
     name: GB1 Live - Deploy
     if: inputs.deploy_gb1_live == true && needs.gb1-approval.outputs.approved == 'true'
     needs: [validate-inputs, gb1-approval]
-    runs-on: ubuntu-latest
+    runs-on: stock-gcp-runner
     timeout-minutes: 45
     environment: gb1-live
     env:
