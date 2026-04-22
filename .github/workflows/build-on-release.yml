@@ -17,14 +17,19 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  build-production:
-    name: Build Production Image
+  extract-version:
+    name: Extract Version
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 5
+    permissions:
+      contents: read
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ steps.extract.outputs.version }}
+      repo_name: ${{ steps.repo_info.outputs.name }}
+      repo_name_lower: ${{ steps.repo_info.outputs.name_lower }}
+      org_name_lower: ${{ steps.repo_info.outputs.org_lower }}
+      image_name: ${{ steps.image_info.outputs.image_name }}
       image_ref: ${{ steps.image_info.outputs.image_ref }}
-
     steps:
       - name: Extract repository info
         id: repo_info
@@ -36,18 +41,19 @@ jobs:
           REPO_NAME_LOWER="${REPO_NAME,,}"
           ORG_NAME="${{ github.repository_owner }}"
           ORG_NAME_LOWER="${ORG_NAME,,}"
+
           echo "name=${REPO_NAME}" >> "$GITHUB_OUTPUT"
           echo "name_lower=${REPO_NAME_LOWER}" >> "$GITHUB_OUTPUT"
           echo "org_lower=${ORG_NAME_LOWER}" >> "$GITHUB_OUTPUT"
 
-      - name: Generate version from release tag
-        id: version
+      - name: Extract version
+        id: extract
         shell: bash
         run: |
           set -euo pipefail
           VERSION="${{ github.event.release.tag_name }}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Generated version: ${VERSION}"
+          echo "Version: ${VERSION}"
 
       - name: Determine image info
         id: image_info
@@ -56,7 +62,7 @@ jobs:
           set -euo pipefail
           ORG_LOWER="${{ steps.repo_info.outputs.org_lower }}"
           REPO_LOWER="${{ steps.repo_info.outputs.name_lower }}"
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ steps.extract.outputs.version }}"
 
           IMAGE_NAME="${{ env.REGISTRY }}/${ORG_LOWER}/${REPO_LOWER}"
           IMAGE_REF="${IMAGE_NAME}:${VERSION}"
@@ -65,30 +71,25 @@ jobs:
           echo "image_ref=${IMAGE_REF}" >> "$GITHUB_OUTPUT"
           echo "Image: ${IMAGE_REF}"
 
+  build-production:
+    name: Build Production Image
+    needs: extract-version
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ needs.extract-version.outputs.version }}
+      image_ref: ${{ needs.extract-version.outputs.image_ref }}
+    steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Debug secrets presence
-        shell: bash
-        run: |
-          set -euo pipefail
-          
-          if [[ -z "${{ secrets.GRGIT_USER }}" ]]; then
-            echo "❌ GRGIT_USER is EMPTY or not accessible"
-          else
-            echo "✅ GRGIT_USER is present"
-          fi
-          
-          if [[ -z "${{ secrets.GRGIT_PASS }}" ]]; then
-            echo "❌ GRGIT_PASS is EMPTY or not accessible"
-          else
-            echo "✅ GRGIT_PASS is present"
-          fi
 
       - name: Log in to Container Registry
         uses: docker/login-action@v3
@@ -105,16 +106,15 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ steps.image_info.outputs.image_ref }}
-            ${{ steps.image_info.outputs.image_name }}:latest
+            ${{ needs.extract-version.outputs.image_ref }}
+            ${{ needs.extract-version.outputs.image_name }}:latest
           labels: |
-            org.opencontainers.image.title=${{ steps.repo_info.outputs.name }}
+            org.opencontainers.image.title=${{ needs.extract-version.outputs.repo_name }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.version=${{ needs.extract-version.outputs.version }}
             org.opencontainers.image.created=${{ github.event.release.published_at }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
           secrets: |
             GITHUB_TOKEN=${{ secrets.GRGIT_PASS }}
           build-args: |
@@ -125,11 +125,73 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker buildx imagetools inspect "${{ steps.image_info.outputs.image_ref }}"
+          docker buildx imagetools inspect "${{ needs.extract-version.outputs.image_ref }}"
 
       - name: Output image details
         shell: bash
         run: |
           set -euo pipefail
-          echo "Built and pushed production image: ${{ steps.image_info.outputs.image_ref }}"
-          echo "Version: ${{ steps.version.outputs.version }}"
+          echo "Built and pushed production image: ${{ needs.extract-version.outputs.image_ref }}"
+          echo "Version: ${{ needs.extract-version.outputs.version }}"
+
+  update-release-notes:
+    name: Update Release Notes
+    if: always() && needs.build-production.result == 'success'
+    needs: [extract-version, build-production]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Add image reference to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IMAGE_REF="${{ needs.extract-version.outputs.image_ref }}"
+          WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          RELEASE_INFO=$(gh api repos/${{ github.repository }}/releases/${{ github.event.release.id }})
+          RELEASE_NOTES=$(echo "$RELEASE_INFO" | jq -r '.body // ""')
+
+          UPDATED_NOTES="${RELEASE_NOTES}
+
+          ## Production Build
+          **Docker Image**: \`${IMAGE_REF}\`
+          **Build Workflow**: [View Run](${WORKFLOW_URL})"
+
+          gh api --method PATCH repos/${{ github.repository }}/releases/${{ github.event.release.id }} \
+            -f body="${UPDATED_NOTES}"
+
+          echo "Release updated with Docker image reference"
+
+  cleanup-on-failure:
+    name: Cleanup Failed Release
+    if: always() && (needs.build-production.result == 'failure' || needs.build-production.result == 'cancelled')
+    needs: [build-production]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Delete release and tag on failure
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Build failed or cancelled - cleaning up release"
+
+          RELEASE_INFO=$(gh api repos/${{ github.repository }}/releases/${{ github.event.release.id }})
+          TAG_NAME=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
+
+          echo "Deleting release ${{ github.event.release.id }}"
+          gh api --method DELETE repos/${{ github.repository }}/releases/${{ github.event.release.id }}
+
+          echo "Deleting Git tag: ${TAG_NAME}"
+          gh api --method DELETE repos/${{ github.repository }}/git/refs/tags/${TAG_NAME}
+
+          echo "Cleanup complete - release and tag removed due to build failure or cancellation"
